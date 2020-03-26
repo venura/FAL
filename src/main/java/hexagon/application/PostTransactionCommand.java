@@ -17,7 +17,7 @@ public class PostTransactionCommand implements IPostTransactionCommand {
 
     private final IAccountRepository accountRepository;
     private final IAccountingTransactionRepository accountingTransactionRepository;
-    private final ITransactionSupport transactionSupport;
+    private final ITransactionSupport<AccountingTransaction> transactionSupport;
 
     public PostTransactionCommand(IAccountRepository accountRepository, IAccountingTransactionRepository accountingTransactionRepository, ITransactionSupport transactionSupport) {
         this.accountRepository = accountRepository;
@@ -27,20 +27,23 @@ public class PostTransactionCommand implements IPostTransactionCommand {
 
     @Override
     public AccountingTransaction execute(PostTransactionModel model) {
-        Set<LedgerEntry> ledgerEntries = Arrays.stream(model.getEntries()).map(
-                entry -> new LedgerEntry(
-                        null,
-                        accountRepository.find(new AccountNumber(entry.getAccountNumber())).getAccountId(),
-                        new Timestamp(Instant.now().toEpochMilli()),
-                        Money.inCents(entry.getAmount(), entry.getCurrency())
-                )
+        return transactionSupport.commit(()->{
+            Set<LedgerEntry> ledgerEntries = Arrays.stream(model.getEntries()).map(
+                    entry -> new LedgerEntry(
+                            null,
+                            accountRepository.find(new AccountNumber(entry.getAccountNumber())).getAccountId(),
+                            new Timestamp(Instant.now().toEpochMilli()),
+                            Money.inCents(entry.getAmount(), entry.getCurrency())
+                    )
 
-        ).collect(Collectors.toSet());
-        AccountingTransaction accountingTransaction = new AccountingTransaction(
-                new Timestamp(model.getTimestamp()),
-                model.getDescription(),
-                ledgerEntries);
-        accountingTransaction = accountingTransactionRepository.add(accountingTransaction);
-        return accountingTransaction;
+            ).collect(Collectors.toSet());
+            AccountingTransaction accountingTransaction = new AccountingTransaction(
+                    new Timestamp(model.getTimestamp()),
+                    model.getDescription(),
+                    ledgerEntries);
+            accountingTransaction = accountingTransactionRepository.add(accountingTransaction);
+            return accountingTransaction;
+        });
+
     }
 }
